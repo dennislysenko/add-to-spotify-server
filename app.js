@@ -24,7 +24,7 @@ if (!process.env.PORT) {
 // Redis setup
 var redis = require('redis');
 var url = require('url');
-var redisURL = url.parse(process.env.REDISCLOUD_URL || 'http://localhost:6379');
+var redisURL = url.parse(process.env.REDIS_URL || 'http://localhost:6379');
 var $redis = redis.createClient(redisURL.port, redisURL.hostname, {no_ready_check: true});
 if (redisURL.auth) {
   $redis.auth(redisURL.auth.split(":")[1]);

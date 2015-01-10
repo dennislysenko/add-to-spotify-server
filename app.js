@@ -14,10 +14,12 @@ var querystring = require('querystring');
 var cookieParser = require('cookie-parser');
 var levenshtein = require('levenshtein');
 var crypto = require('crypto');
-var env = require('node-env-file');
 
-// Load environment variables on local setup
-env(__dirname + '/.env');
+if (!process.env.PORT) {
+  // Load environment variables on local setup
+  var env = require('node-env-file');
+  env(__dirname + '/.env');
+}
 
 // Redis setup
 var redis = require('redis');

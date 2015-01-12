@@ -149,29 +149,37 @@ app.get('/callback', function(req, res) {
   }
 });
 
-app.get('/refresh_token', function(req, res) {
+/**
+ * Uses the Spotify refresh token tied to the credentials in the current request to refresh the respective access token,
+ * which has presumably now expired. Then, calls a callback (most likely to re-try the original request that made it
+ * clear that refreshing was necessary) with the updated spotify credentials.
+ * @param req express request object
+ * @param callback called with an object with the properties: access_token, refresh_token, user_id
+ */
+function refreshToken(req, callback) {
+  getSpotifyCredentials(req, function(spotifyCredentials) {
+    var refresh_token = spotifyCredentials.refresh_token;
+    var authOptions = {
+      url: 'https://accounts.spotify.com/api/token',
+      headers: { 'Authorization': 'Basic ' + (new Buffer(client_id + ':' + client_secret).toString('base64')) },
+      form: {
+        grant_type: 'refresh_token',
+        refresh_token: refresh_token
+      },
+      json: true
+    };
 
-  // requesting access token from refresh token
-  var refresh_token = req.query.refresh_token;
-  var authOptions = {
-    url: 'https://accounts.spotify.com/api/token',
-    headers: { 'Authorization': 'Basic ' + (new Buffer(client_id + ':' + client_secret).toString('base64')) },
-    form: {
-      grant_type: 'refresh_token',
-      refresh_token: refresh_token
-    },
-    json: true
-  };
+    request.post(authOptions, function(error, response, body) {
+      if (!error && response.statusCode === 200) {
+        var requestAccessToken = req.query.access_token;
+        spotifyCredentials.access_token = body.access_token;
+        $redis.set(buildRedisKeyforAccessToken(requestAccessToken), JSON.stringify(spotifyCredentials));
 
-  request.post(authOptions, function(error, response, body) {
-    if (!error && response.statusCode === 200) {
-      var access_token = body.access_token;
-      res.send({
-        'access_token': access_token
-      });
-    }
+        callback(spotifyCredentials);
+      }
+    });
   });
-});
+}
 
 function buildRedisKeyforAccessToken(token) {
   return "spotify-access-token-" + token;
@@ -208,7 +216,8 @@ app.get('/generate_access_token', function(req, res) {
 
 /**
  * Extracts spotify access/refresh tokens from a node-side access token specified in the given request.
- * @param req
+ * @param req express request
+ * @param callback called with an object containing access_token, refresh_token, and user_id
  * @returns {*}
  */
 function getSpotifyCredentials(req, callback) {
@@ -228,8 +237,7 @@ function getSpotifyCredentials(req, callback) {
 }
 
 /**
- * Runs an authenticated Spotify Web API request.
- * TODO auto-refresh expired access tokens
+ * Runs an authenticated Spotify Web API request, with support for auto-refreshing expired access tokens.
  * @param options object with keys:
  *  relative url, e.g. '/me' (required)
  *  method (required)
@@ -244,19 +252,32 @@ function authed_spotify_request(options, req) {
 
   getSpotifyCredentials(req, function(spotifyCredentials) {
     if (spotifyCredentials && spotifyCredentials.access_token) {
-      request[options.method]({
-        url: 'https://api.spotify.com/v1' + options.url,
-        qs: options.query,
-        form: options.form,
-        json: true,
-        headers: { 'Authorization': 'Bearer ' + spotifyCredentials.access_token }
-      }, options.callback || function(error, response, body) {
-        if (options.res) {
-          options.res.send(body);
-        } else {
-          console.log(body);
-        }
-      });
+      var spotifyRequestInternal = function(spotifyCredentialsToUse) {
+        request[options.method]({
+          url: 'https://api.spotify.com/v1' + options.url,
+          qs: options.query,
+          form: options.form,
+          json: true,
+          headers: { 'Authorization': 'Bearer ' + spotifyCredentialsToUse.access_token }
+        }, function(error, response, body) {
+          if (response.statusCode == 401) {
+            refreshToken(req, function(newSpotifyCredentials) {
+              spotifyRequestInternal(newSpotifyCredentials);
+            });
+          } else {
+            if (options.callback) {
+              options.callback(error, response, body);
+            } else if (options.res) {
+              options.res.send(body);
+            } else {
+              // Somehow notify someone!!
+              console.log(body);
+            }
+          }
+        });
+      };
+
+      spotifyRequestInternal(spotifyCredentials);
     }
   });
 }
@@ -360,19 +381,19 @@ app.get('/search_song', function(req, res) {
         // Find the best-match track from the spotify results
         var minLevenshtein = Infinity;
         var bestTrack = null;
-        for (var index in tracks) {
+        for (var index = 0; index < tracks.length; index++) {
           var track = tracks[index];
 
           // Build a list containing each individual artist as well as a string containing all of the track's artists
           var artist_combos = [];
-          for (var artistindex in track.artists) {
+          for (var artistindex = 0; artistindex < track.artists.length; artistindex++) {
             var artist = track.artists[artistindex].name;
             artist_combos.push(artist);
           }
           artist_combos.push(artist_combos.join(' '));
 
           // Now, run through each element, check how well each matches our desired track (q), and pick the best one
-          for (var artistcomboindex in artist_combos) {
+          for (var artistcomboindex = 0; artistcomboindex < artist_combos.length; artistcomboindex++) {
             var artist_combo = artist_combos[artistcomboindex];
 
             var lev = levenshtein(buildQuery(artist_combo, track.name), q);

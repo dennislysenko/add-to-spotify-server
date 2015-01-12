@@ -354,6 +354,17 @@ app.get('/search_song', function(req, res) {
     if (title) {
       q += title;
     }
+
+    q = q.toLowerCase();
+    q = q.replace(/[\(\)\[\]\<\>]/g, '');             // grouping symbols
+    q = q.replace(/\./g, '');                         // dots
+    q = q.replace(/f(t|eat)/g, '');                   // feat/ft
+    q = q.replace(/official( music)?( video)?/g, ''); // youtube tags
+    q = q.replace(/lyrics/g, '');                     // cont'd
+    q = q.replace(/h(q|d)?/g, '');                    // ...
+    q = q.replace(/original mix/g, '');               // generally speaking, original mix is a useless identifier
+                                                      // radio edit is always specified, and special edits/mixes
+                                                      // are differently labeled
     return q;
   }
 

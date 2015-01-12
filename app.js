@@ -357,12 +357,12 @@ app.get('/search_song', function(req, res) {
 
     q = q.toLowerCase();
     q = q.replace(/[\(\)\[\]\<\>]/g, '');             // grouping symbols
-    q = q.replace(/\./g, '');                         // dots
-    q = q.replace(/f(t|eat)/g, '');                   // feat/ft
+    q = q.replace(/\./g, '');                         // dots. spotify searching M.I.A. or MIA works, but M I A doesn't
+    q = q.replace(/\bf(ea)?t(uring)?\b/g, '');        // feat/ft/featuring
     q = q.replace(/official( music)?( video)?/g, ''); // youtube tags
-    q = q.replace(/lyrics/g, '');                     // cont'd
-    q = q.replace(/h(q|d)?/g, '');                    // ...
-    q = q.replace(/original mix/g, '');               // generally speaking, original mix is a useless identifier
+    q = q.replace(/\blyric(s)?( video)?\b/g, '');     // lyrics/lyric(s) video
+    q = q.replace(/\bh(q|d)\b/g, '');                 // ...
+    q = q.replace(/\boriginal mix\b/g, '');           // generally speaking, original mix is a useless identifier
                                                       // radio edit is always specified, and special edits/mixes
                                                       // are differently labeled
     return q;

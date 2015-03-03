@@ -57,6 +57,10 @@ var app = express();
 app.use(express.static(__dirname + '/public'))
    .use(cookieParser());
 
+app.get('/refresh_redis', function(req, res) {
+	$redis.set("ping", new Date().getTime());
+});
+
 app.get('/login', function(req, res) {
   var accessToken = req.query.access_token;
 

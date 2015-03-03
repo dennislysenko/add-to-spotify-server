@@ -59,6 +59,7 @@ app.use(express.static(__dirname + '/public'))
 
 app.get('/refresh_redis', function(req, res) {
 	$redis.set("ping", new Date().getTime());
+	res.send({ success:true });
 });
 
 app.get('/login', function(req, res) {
